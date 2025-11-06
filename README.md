@@ -1,27 +1,28 @@
 # FastF1 Race Predictor (Single Script)
 
-This repository now ships a single Python file, `race_predictor.py`, that uses
-[FastF1](https://theoehrly.github.io/Fast-F1/) timing data to forecast the
-finishing order of the next Formula 1 race on the calendar. The script locates
-the upcoming event (e.g. Brazil/São Paulo) for the current season, collects all
-completed sessions (practice, qualifying, sprint), and scores each driver based
-on their pace and consistency.
+This repository ships two complementary Python scripts powered by
+[FastF1](https://theoehrly.github.io/Fast-F1/):
+
+- `race_predictor.py` – forecasts finishing order using session pace metrics
+  (practice, qualifying, sprint).
+- `previous_finish_predictor.py` – trains a lightweight ML model that relies
+  solely on each driver's finishing position in the previous race (2022 → now).
 
 ## Prerequisites
 
 - Python 3.10 or later
-- Packages: `fastf1`, `pandas`, `numpy`
+- Packages: `fastf1`, `pandas`, `numpy`, `scikit-learn`
 
 Install the dependencies in your environment of choice:
 
 ```bash
-python3 -m pip install fastf1 pandas numpy
+python3 -m pip install fastf1 pandas numpy scikit-learn
 ```
 
 FastF1 keeps a cache of the downloaded telemetry. By default the script uses
 `./cache`; you can change this with `--cache-dir`.
 
-## Usage
+## Usage – Session Pace Predictor
 
 Run the predictor with no arguments to target the next race automatically:
 
@@ -44,7 +45,28 @@ already run):
 python race_predictor.py --event "São Paulo Grand Prix" --top 10
 ```
 
-## How It Works
+## Usage – Previous Finish Predictor
+
+Run the model builder + predictor without arguments to gather race results from
+2022 onwards, train a random forest regressor, and forecast the next race on the
+calendar:
+
+```bash
+python previous_finish_predictor.py
+```
+
+Key options:
+
+- `--start-season 2022` / `--end-season 2024` – control the historical window
+- `--season 2025 --event 3` – target a specific season and round (name or number)
+- `--export-dataset data.csv` – persist the assembled training dataset
+- `--top 10` – limit the printed leaderboard
+
+The script prints dataset statistics, validation metrics (MAE, R² vs a baseline
+that simply repeats the previous finishing position), and the predicted finishing
+order for the requested event.
+
+## How It Works – Session Pace Predictor
 
 1. Determine the next (or specified) race via `fastf1.get_event_schedule`.
 2. For each completed session, fetch lap data and compute pace metrics:
@@ -55,6 +77,16 @@ python race_predictor.py --event "São Paulo Grand Prix" --top 10
 
 If no sessions have been completed yet, the script will notify you to rerun it
 once practice or qualifying results are available.
+
+## How It Works – Previous Finish Predictor
+
+1. Download race classification results for the requested seasons via FastF1.
+2. Assemble a per-driver dataset linking the previous race's finishing position
+   to the current race's finishing position (dropping entries without history).
+3. Train a `RandomForestRegressor` and benchmark it against the trivial baseline
+   that simply repeats the previous result.
+4. Gather results from the most recent completed race to generate features for
+   the target event and rank drivers by the model's predicted finishing position.
 
 ## Troubleshooting
 
