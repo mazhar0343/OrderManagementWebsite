@@ -1,102 +1,70 @@
-# FastF1 Race Predictor
+# FastF1 Race Predictor (Single Script)
 
-A lightweight Formula 1 race outcome predictor that leverages the
-[FastF1](https://theoehrly.github.io/Fast-F1/) timing API to analyse practice and
-qualifying pace. The predictor aggregates lap data from selected sessions,
-applies a configurable weighting scheme, and produces an estimated finishing
-order for the upcoming race.
+This repository now ships a single Python file, `race_predictor.py`, that uses
+[FastF1](https://theoehrly.github.io/Fast-F1/) timing data to forecast the
+finishing order of the next Formula 1 race on the calendar. The script locates
+the upcoming event (e.g. Brazil/São Paulo) for the current season, collects all
+completed sessions (practice, qualifying, sprint), and scores each driver based
+on their pace and consistency.
 
-## Features
-
-- Pulls detailed session telemetry via FastF1 with local caching for repeated use
-- Computes per-driver pace metrics (best/median/long-run laps, lap volume)
-- Generates a ranked prediction table with confidence scores and gap estimates
-- Offers a command-line interface with JSON/CSV export options
-
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.10 or later
-- An active internet connection (FastF1 downloads timing data on demand)
+- Packages: `fastf1`, `pandas`, `numpy`
 
-### Installation
+Install the dependencies in your environment of choice:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python3 -m pip install fastf1 pandas numpy
 ```
 
-The editable install exposes the `fastf1-race-predictor` console entrypoint and
-installs required dependencies such as `fastf1`, `pandas`, and `numpy`.
-
-### Cache Configuration
-
-FastF1 stores downloaded data in a cache directory so subsequent runs are much
-faster. By default, this project uses `./cache`; you can change this via the CLI
-or environment variables.
+FastF1 keeps a cache of the downloaded telemetry. By default the script uses
+`./cache`; you can change this with `--cache-dir`.
 
 ## Usage
 
-Predict the 2024 Bahrain Grand Prix after qualifying data is available:
+Run the predictor with no arguments to target the next race automatically:
 
 ```bash
-fastf1-race-predictor --season 2024 --event Bahrain --sessions FP1 FP2 Q --top 10
+python race_predictor.py
 ```
 
-The same command can be executed without installation from the repository root:
+Typical options:
+
+- `--season 2024` – override the season year
+- `--event "São Paulo Grand Prix"` – force a specific event (name or round number)
+- `--top 10` – limit the number of rows printed
+- `--show-metrics` – include diagnostic columns (session scores, lap bonuses, etc.)
+- `--export-json predictions.json` / `--export-csv predictions.csv` – persist outputs
+
+Example (predict the upcoming Brazil round, assuming practice and qualifying have
+already run):
 
 ```bash
-python -m fastf1_race_predictor.cli --season 2024 --event 1 --sessions FP1 FP2 FP3 Q
+python race_predictor.py --event "São Paulo Grand Prix" --top 10
 ```
 
-Useful flags:
+## How It Works
 
-- `--top`: limit the number of rows printed
-- `--show-metrics`: include diagnostic columns such as missing session data
-- `--export-json predictions.json`: write the full result to disk
-- `--export-csv predictions.csv`: export the table for further analysis
+1. Determine the next (or specified) race via `fastf1.get_event_schedule`.
+2. For each completed session, fetch lap data and compute pace metrics:
+   - Best, median, and long-run lap times
+   - Lap counts and low-running penalties
+3. Weight and combine the metrics to produce a ranked finishing order with
+   confidence estimates and predicted time gaps.
 
-## How the Predictor Works
-
-1. FastF1 loads the requested sessions (typically FP1–FP3 and Qualifying).
-2. For each driver, the predictor computes:
-   - Best, median, and long-run lap times (based on accurate laps)
-   - Lap counts to gauge reliability
-   - Flags for low running that trigger penalties
-3. Weighted pace scores from each session are combined into an overall driver
-   score, producing a ranked finishing order with confidence values.
-
-The current implementation focuses on pace-based heuristics. It does not yet
-incorporate weather forecasts, tyre choices during the race, or safety car
-probabilities. Those can be added by extending `FastF1RacePredictor`.
+If no sessions have been completed yet, the script will notify you to rerun it
+once practice or qualifying results are available.
 
 ## Troubleshooting
 
-- **Slow or failing requests**: the first run against a session downloads
-  several megabytes of timing data. Ensure your connection is stable; rerunning
-  the command will reuse cached data.
-- **Session not yet available**: FastF1 can only load sessions that the FIA has
-  published. If you run the predictor before an event has finished qualifying,
-  skip unavailable sessions via `--sessions`.
-- **API rate limits**: heavy automated usage may trigger remote rate limits.
-  Consider caching at the season level and spacing out requests.
-
-## Development
-
-Install optional tooling:
-
-```bash
-pip install -e .[dev]
-```
-
-Run formatting and quality checks:
-
-```bash
-ruff check src
-pytest
-```
+- **Slow first run** – the script downloads several datasets per session. The
+  cache makes subsequent executions much faster.
+- **Session missing** – if a practice or sprint has not yet been staged, it is
+  skipped automatically. You can also pass `--sessions` to specify the data you
+  want to include.
+- **Event cannot be found** – ensure the season/year is correct or pass the
+  round number with `--event 20`.
 
 ## License
 
